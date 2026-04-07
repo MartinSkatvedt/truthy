@@ -1,5 +1,18 @@
 ---
 services:
+  mongo:
+    image: mongo:7
+    container_name: mongo
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   flaresolverr:
     # DockerHub mirror flaresolverr/flaresolverr:latest
     image: ghcr.io/flaresolverr/flaresolverr:latest
@@ -9,6 +22,24 @@ services:
       - LOG_HTML=${LOG_HTML:-false}
       - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
       - TZ=Europe/London
-    ports:
-      - "${PORT:-8191}:8191"
     restart: unless-stopped
+
+  app:
+    build: .
+    container_name: truthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Override to use Docker service names instead of localhost
+      - MONGO_DBSTRING=mongodb://mongo:27017/
+      - FLARESOLVERR_ADDRESS=flaresolverr
+    depends_on:
+      mongo:
+        condition: service_healthy
+      flaresolverr:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
